@@ -1,41 +1,3 @@
-// pipeline {
-//   agent any
-//   options { timestamps() }
-
-//   stages {
-//     stage('Checkout') {
-//       steps { checkout scm }
-//     }
-//     stage('Install Dependencies') {
-//       steps { bat 'npm ci' }
-//     }
-//     stage('Run Testim Suite') {
-//       steps {
-//         withCredentials([string(credentialsId: 'TESTIM_TOKEN', variable: 'TESTIM_TOKEN')]) {
-//           bat '''
-//             npx -y @testim/testim-cli testim ^
-//               --token "%TESTIM_TOKEN%" ^
-//               --project "usw23BAJHoKZwqT8pHir81ZX" ^
-//               --use-local-chrome-driver ^
-//               --user "OfxKgEkfQ3tkh8uGiyTc" ^
-//               --mode "selenium" ^
-//               --branch "main" ^
-//               --test-plan "Wallet_transaction" ^
-//               --test-config "FHD 1920x1080"
-//           '''
-//         }
-//       }
-//     }
-//   }
-
-//   post {
-//     always {
-//       archiveArtifacts artifacts: '**/test-results/**/*.*, **/*.log', allowEmptyArchive: true
-//     }
-//   }
-// }
-
-
 pipeline {
   agent any
   options { timestamps() }
@@ -43,7 +5,6 @@ pipeline {
   stages {
     stage('Checkout (SCM-backed)') {
       steps {
-        // 'checkout scm' works only for Pipeline-from-SCM jobs (which you now use)
         checkout scm
       }
     }
@@ -51,7 +12,7 @@ pipeline {
     stage('Sanity: Env & Tools') {
       steps {
         bat '''
-          echo === NODE & NPM VERSIONS ===
+          echo === NODE and NPM VERSIONS ===
           node -v
           npm -v
           echo.
@@ -65,7 +26,11 @@ pipeline {
           echo.
           echo === Chrome Presence (optional) ===
           where chrome || echo Chrome not found on PATH
-          "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" --version || echo Chrome.exe not found at default path
+          if exist "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" (
+            "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" --version
+          ) else (
+            echo Chrome.exe not found at default path
+          )
           echo.
           echo === NPM REGISTRY/PROXY (if corporate network) ===
           npm config get proxy
@@ -77,14 +42,12 @@ pipeline {
 
     stage('Run Testim (multi-strategy)') {
       environment {
-        // flip this to 'grid' if local Chrome is not available or flaky
-        TESTIM_RUN_TARGET = 'local'   // 'local' or 'grid'
+        TESTIM_RUN_TARGET = 'local'   // set to 'grid' if local Chrome is not available
       }
       steps {
         withCredentials([string(credentialsId: 'TESTIM_TOKEN', variable: 'TESTIM_TOKEN')]) {
-          // Try NPX first, then NPM EXEC, then global install + PATH fix.
           bat '''
-            setlocal ENABLEDELAYEDEXPANSION
+            setlocal ENABLEDELAYEDEXECUTION
             echo ==== START TESTIM RUN ====
             set TESTIM_ARGS=--token "%TESTIM_TOKEN%" --project "usw23BAJHoKZwqT8pHir81ZX" --branch "main" --test-plan "Wallet_transaction" --test-config "FHD 1920x1080"
 
@@ -109,7 +72,6 @@ pipeline {
             echo.
             echo === Attempt 3: global install + PATH fix ===
             npm i -g @testim/testim-cli
-            REM Add SYSTEM user global npm bin to PATH for this step
             set "PATH=C:\\Windows\\system32\\config\\systemprofile\\AppData\\Roaming\\npm;%PATH%"
             where testim
             testim %TESTIM_ARGS%
@@ -134,7 +96,6 @@ pipeline {
 
   post {
     always {
-      // stash whatever output you have (adjust patterns if you emit reports)
       archiveArtifacts artifacts: '**/*.log, **/test-results/**/*.*', allowEmptyArchive: true
     }
     failure {
