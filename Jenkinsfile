@@ -47,35 +47,40 @@ pipeline {
       steps {
         withCredentials([string(credentialsId: 'TESTIM_TOKEN', variable: 'TESTIM_TOKEN')]) {
           bat '''
-            setlocal ENABLEDELAYEDEXECUTION
+            if "%TESTIM_TOKEN%"=="" (
+              echo [ERROR] TESTIM_TOKEN is empty or missing. Ensure a Secret text credential with ID TESTIM_TOKEN exists.
+              exit /b 1
+            )
+
+            setlocal ENABLEDELAYEDEXPANSION
             echo ==== START TESTIM RUN ====
             set TESTIM_ARGS=--token "%TESTIM_TOKEN%" --project "usw23BAJHoKZwqT8pHir81ZX" --branch "main" --test-plan "Wallet_transaction" --test-config "FHD 1920x1080"
 
             if /I "%TESTIM_RUN_TARGET%"=="local" (
-              set TESTIM_ARGS=%TESTIM_ARGS% --mode "selenium" --use-local-chrome-driver
+              set TESTIM_ARGS=!TESTIM_ARGS! --mode "selenium" --use-local-chrome-driver
               echo Running with LOCAL Chrome driver...
             ) else (
-              set TESTIM_ARGS=%TESTIM_ARGS% --grid "Testim-Grid" --mode "selenium"
+              set TESTIM_ARGS=!TESTIM_ARGS! --grid "Testim-Grid" --mode "selenium"
               echo Running on TESTIM GRID...
             )
 
             echo.
             echo === Attempt 1: npx ===
-            npx -y @testim/testim-cli testim %TESTIM_ARGS%
-            if %ERRORLEVEL%==0 goto :done
+            npx -y @testim/testim-cli testim !TESTIM_ARGS!
+            if !ERRORLEVEL!==0 goto :done
 
             echo.
             echo === Attempt 2: npm exec ===
-            npm exec -y @testim/testim-cli testim %TESTIM_ARGS%
-            if %ERRORLEVEL%==0 goto :done
+            npm exec -y @testim/testim-cli testim !TESTIM_ARGS!
+            if !ERRORLEVEL!==0 goto :done
 
             echo.
             echo === Attempt 3: global install + PATH fix ===
             npm i -g @testim/testim-cli
             set "PATH=C:\\Windows\\system32\\config\\systemprofile\\AppData\\Roaming\\npm;%PATH%"
             where testim
-            testim %TESTIM_ARGS%
-            if %ERRORLEVEL%==0 goto :done
+            testim !TESTIM_ARGS!
+            if !ERRORLEVEL!==0 goto :done
 
             echo.
             echo *** ALL ATTEMPTS FAILED ***
